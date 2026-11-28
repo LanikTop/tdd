@@ -4,11 +4,16 @@ namespace TagsCloudVisualization;
 
 public class CircularCloudLayouter
 {
-    internal readonly Point center;
-    internal readonly List<Rectangle> cloudRectangles = new();
+    private readonly Point center;
+    private readonly List<Rectangle> cloudRectangles = new();
     private readonly double spiralStep;
     private readonly double radiusOffset;
     private readonly int indent;
+    private double spiralShift;
+
+    public Point Center => center;
+    public IReadOnlyList<Rectangle> CloudRectangles => cloudRectangles.AsReadOnly();
+    public int Indent => indent;
 
     /// <summary>
     /// <param name="center">Coordinates of the tag cloud center</param>
@@ -18,6 +23,13 @@ public class CircularCloudLayouter
     /// </summary>
     public CircularCloudLayouter(Point center, double spiralStep = 0.05, double radiusOffset = 3.0, int indent = 0)
     {
+        if (spiralStep <= 0)
+            throw new ArgumentException("Spiral step must be positive");
+        if (radiusOffset <= 0)
+            throw new ArgumentException("radiusOffset step must be positive");
+        if (indent < 0)
+            throw new ArgumentException("indent must be non-negative");
+
         this.center = center;
         this.spiralStep = spiralStep;
         this.radiusOffset = radiusOffset;
@@ -26,6 +38,7 @@ public class CircularCloudLayouter
 
     public Rectangle PutNextRectangle(Size rectangleSize)
     {
+        CheckRectangleSize(rectangleSize);
         if (cloudRectangles.Count == 0)
         {
             var firstRectangle = CreateRectangleWithCenter(center, rectangleSize);
@@ -33,7 +46,7 @@ public class CircularCloudLayouter
             return firstRectangle;
         }
 
-        for (var spiralShift = 0.0;; spiralShift += spiralStep)
+        for (;; spiralShift += spiralStep)
         {
             var radius = radiusOffset * spiralShift;
             var candidateCenter = new PointF(
@@ -55,11 +68,12 @@ public class CircularCloudLayouter
 
     public CircularCloudLayouter WithRectangle(Size rectangleSize)
     {
+        CheckRectangleSize(rectangleSize);
         PutNextRectangle(rectangleSize);
         return this;
     }
 
-    private Rectangle CreateRectangleWithCenter(PointF center, Size size)
+    private static Rectangle CreateRectangleWithCenter(PointF center, Size size)
     {
         var location = new Point((int)Math.Round(center.X - size.Width / 2.0), (int)Math.Round(center.Y - size.Height / 2.0));
         return new Rectangle(location, size);
@@ -100,5 +114,11 @@ public class CircularCloudLayouter
             rectangleXCenter = rectangle.X + rectangle.Width / 2.0;
             rectangleYCenter = rectangle.Y + rectangle.Height / 2.0;
         }
+    }
+
+    private void CheckRectangleSize(Size size)
+    {
+        if (size.Width <= 0 || size.Height <= 0)
+            throw new ArgumentException($"Rectangle size must be positive");
     }
 }

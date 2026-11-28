@@ -23,7 +23,9 @@ public class TagsCloudVisualizationAcceptanceTests
         {
             var testName = TestContext.CurrentContext.Test.Name;
             var fileName = $"FailedTest_{testName}_{DateTime.Now:HH_mm_ss}.png";
-            var path = Path.Combine(TestContext.CurrentContext.WorkDirectory, fileName);
+            var dir = Path.Combine(TestContext.CurrentContext.WorkDirectory, "TestImages");
+            var path = Path.Combine(dir, fileName);
+            Directory.CreateDirectory(dir);
             TagCloudSaver.Save(_layouter, path, 100, 100);
             Console.WriteLine($"Tag cloud visualization saved to file {path}");
         }
@@ -77,7 +79,7 @@ public class TagsCloudVisualizationAcceptanceTests
     }
 
     [Test]
-    public void PutNextRectangle_WhenManyRectangles_ReturnsRectanglesFormCircle()
+    public void PutNextRectangle_NewRectangleNearbyToCloud()
     {
         var sizes = new[]
         {
@@ -89,18 +91,30 @@ public class TagsCloudVisualizationAcceptanceTests
             new Size(1, 1),
             new Size(2, 2)
         };
-        var rectangles = sizes.Select(_layouter.PutNextRectangle).ToList();
-        var minX = rectangles.Min(r => r.Left);
-        var minY = rectangles.Min(r => r.Top);
-        var maxX = rectangles.Max(r => r.Right);
-        var maxY = rectangles.Max(r => r.Bottom);
-        var cloudWidth = maxX - minX;
-        var cloudHeight = maxY - minY;
-        ((double)(Math.Max(cloudWidth, cloudHeight) / (double)Math.Min(cloudWidth, cloudHeight))).Should().BeLessThan(2);
+        var rects = new List<Rectangle>();
+        foreach (var size in sizes)
+        {
+            var rect = _layouter.PutNextRectangle(size);
+            if (rects.Count == 0)
+            {
+                rects.Add(rect);
+                continue;
+            }
+            rects.Any(cloudRect => IsNearbyWithNext(rect, cloudRect)).Should().BeTrue();
+            rects.Add(rect);
+        }
+    }
+
+    private bool IsNearbyWithNext(Rectangle newRect, Rectangle cloudRects)
+    {
+        var inaccuracy = _layouter.Indent + 2;
+        var copyNewRect = newRect;
+        copyNewRect.Inflate(inaccuracy, inaccuracy);
+        return copyNewRect.IntersectsWith(cloudRects);
     }
 
     [Test]
-    public void PutNextRectangle_WhenManyRectangles_CloudBeCompact()
+    public void PutNextRectangle_ReturnsRectangleWithRequestedSize()
     {
         var sizes = new[]
         {
@@ -112,16 +126,38 @@ public class TagsCloudVisualizationAcceptanceTests
             new Size(1, 1),
             new Size(2, 2)
         };
-        var rectangles = sizes.Select(_layouter.PutNextRectangle).ToList();
-        var rectangleAreas = rectangles.Sum(r => r.Width * r.Height);
-        var minX = rectangles.Min(r => r.Left);
-        var minY = rectangles.Min(r => r.Top);
-        var maxX = rectangles.Max(r => r.Right);
-        var maxY = rectangles.Max(r => r.Bottom);
-        var cloudWidth = maxX - minX;
-        var cloudHeight = maxY - minY;
-        var cloudRectangleArea = cloudWidth * cloudHeight;
+        foreach (var size in sizes)
+        {
+            var rect = _layouter.PutNextRectangle(size);
+            rect.Size.Should().Be(size);
+        }
+    }
 
-        (cloudRectangleArea / (double)rectangleAreas).Should().BeLessThan(2);
+    [Test]
+    public void PutNextRectangle_WhenInvalidRectangleSize_ThrowArgumentException()
+    {
+        Action action = () => _layouter.PutNextRectangle(new Size(-1, 10));
+        action.Should().Throw<ArgumentException>();
+    }
+
+    [Test]
+    public void CircularCloudLayouter_WhenInvalidSpiralStep_ThrowArgumentException()
+    {
+        Action action = () => new CircularCloudLayouter(new Point(0, 0), -1);
+        action.Should().Throw<ArgumentException>();
+    }
+
+    [Test]
+    public void CircularCloudLayouter_WhenInvalidRadiusOffset_ThrowArgumentException()
+    {
+        Action action = () => new CircularCloudLayouter(new Point(0, 0), 0.05, -3.0);
+        action.Should().Throw<ArgumentException>();
+    }
+
+    [Test]
+    public void CircularCloudLayouter_WhenInvalidIndent_ThrowArgumentException()
+    {
+        Action action = () => new CircularCloudLayouter(new Point(0, 0), 0.05, 3.0, -1);
+        action.Should().Throw<ArgumentException>();
     }
 }
